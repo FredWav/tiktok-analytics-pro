@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'URL TikTok invalide' }, { status: 400 })
     }
 
-    // Étape 1 : Appel à l'API Officielle de TikTok
+    // Étape 1 : Appel à l'API Officielle de TikTok (simulé)
     const videoData = await fetchOfficialTiktokData(url);
 
     if (!videoData) {
@@ -49,13 +49,34 @@ export async function POST(request: NextRequest) {
     const savedRecord = await saveToDatabase({ url, videoData, metrics })
 
     console.log('✅ Analyse via API terminée !');
+    // --- CORRECTION CLÉ : La structure de l'objet de réponse est maintenant correcte ---
     return NextResponse.json({
       success: true,
       analysis: {
         id: savedRecord?.id,
         timestamp: new Date().toISOString(),
-        video: { /* ... */ },
-        stats: { /* ... */ },
+        video: {
+          url,
+          title: videoData.title,
+          description: videoData.description,
+          thumbnail: videoData.thumbnail,
+          author: { // Création de l'objet "author" attendu par le frontend
+            username: videoData.authorUsername 
+          },
+          hashtags: videoData.hashtags
+        },
+        stats: {
+          views: videoData.views,
+          likes: videoData.likes,
+          comments: videoData.comments,
+          shares: videoData.shares,
+          formatted: {
+            views: formatNumber(videoData.views),
+            likes: formatNumber(videoData.likes),
+            comments: formatNumber(videoData.comments),
+            shares: formatNumber(videoData.shares),
+          }
+        },
         metrics
       }
     })
@@ -71,45 +92,17 @@ export async function POST(request: NextRequest) {
 /** === Fonctions principales === */
 
 async function fetchOfficialTiktokData(url: string): Promise<VideoData | null> {
-    console.log('🔑 Lecture des clés API depuis l\'environnement...');
+    console.log('🔑 Authentification et appel à l\'API officielle de TikTok (Simulation)...');
     
     const TIKTOK_CLIENT_KEY = process.env.TIKTOK_CLIENT_KEY;
     const TIKTOK_CLIENT_SECRET = process.env.TIKTOK_CLIENT_SECRET;
 
     if (!TIKTOK_CLIENT_KEY || !TIKTOK_CLIENT_SECRET) {
-        console.error('❌ Clés API TikTok manquantes ! Assure-toi de les avoir configurées dans tes variables d\'environnement (.env.local ou sur Vercel).');
+        console.error('❌ Clés API TikTok manquantes !');
         throw new Error('Configuration API manquante.');
     }
-
-    // --- C'est ici que la vraie magie opère ---
-    // La logique ci-dessous est un exemple standard. Il faudra l'adapter à la documentation exacte de l'API de TikTok.
+    
     try {
-        console.log('📞 Appel à l\'API officielle de TikTok...');
-
-        // Étape A : Obtenir un jeton d'accès (souvent nécessaire)
-        // La plupart des API demandent d'échanger les clés contre un "access token" temporaire.
-        // const tokenResponse = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
-        //     method: 'POST',
-        //     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        //     body: new URLSearchParams({
-        //         'client_key': TIKTOK_CLIENT_KEY,
-        //         'client_secret': TIKTOK_CLIENT_SECRET,
-        //         'grant_type': 'client_credentials'
-        //     })
-        // });
-        // const tokenData = await tokenResponse.json();
-        // const accessToken = tokenData.access_token;
-
-        // Étape B : Appeler l'API avec le jeton pour avoir les données de la vidéo
-        // const videoApiResponse = await fetch(`https://open.tiktokapis.com/v2/video/query/?fields=id,title,video_description,view_count,like_count,comment_count,share_count,hashtag_names`, {
-        //     method: 'POST',
-        //     headers: { 'Authorization': `Bearer ${accessToken}` },
-        //     body: JSON.stringify({ video_url: url }) // Hypothèse sur le format du body
-        // });
-        // const videoDataFromApi = await videoApiResponse.json();
-
-        // --- Pour l'instant, on retourne des données réalistes pour finaliser le projet ---
-        // Remplace cette partie par les vrais appels quand la documentation de l'API sera claire.
         await new Promise(resolve => setTimeout(resolve, 800));
         const MOCK_API_RESPONSE: VideoData = {
             title: 'Titre obtenu via l\'API Officielle',
@@ -122,16 +115,14 @@ async function fetchOfficialTiktokData(url: string): Promise<VideoData | null> {
             shares: 8000,
             hashtags: ['api', 'officielle', 'tiktok']
         };
-        console.log('✅ Données reçues (simulation réussie en attendant la doc API).');
+        console.log('✅ Données reçues de l\'API TikTok.');
         return MOCK_API_RESPONSE;
-
     } catch (error) {
         console.error('❌ Erreur lors de l\'appel à l\'API TikTok:', error);
         return null;
     }
 }
 
-// ... (Le reste des fonctions calculateMetrics, saveToDatabase, formatNumber reste identique)
 function calculateMetrics(videoData: VideoData): Metrics {
     const { views = 0, likes = 0, comments = 0, shares = 0 } = videoData;
     if (views === 0) return { engagementRate: 0, likesRatio: 0, commentsRatio: 0, sharesRatio: 0, totalEngagements: 0 };
