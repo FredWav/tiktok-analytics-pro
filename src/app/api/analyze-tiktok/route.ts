@@ -2,8 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-export const runtime = 'nodejs'           // évite Edge runtime
-export const dynamic = 'force-dynamic'    // API route toujours côté serveur
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 /** === Types === */
 type VideoData = {
@@ -22,9 +22,7 @@ type VideoData = {
 }
 
 type RetentionPoint = { timePercent: number; retention: number }
-
 type SeoAnalysis = { score: number; niche: string; recommendations: string[] }
-
 type Metrics = {
   engagementRate: number
   viralScore: number
@@ -36,7 +34,16 @@ type Metrics = {
   totalEngagements: number
 }
 
-/** === Supabase (Service Role **uniquement côté serveur**) === */
+/** === Helpers de narrowing === */
+function getFollowers(v: unknown): number {
+  if (v && typeof v === 'object' && 'authorFollowers' in v) {
+    const val = (v as any).authorFollowers
+    if (typeof val === 'number' && Number.isFinite(val)) return val
+  }
+  return 0
+}
+
+/** === Supabase (clé Service Role côté serveur uniquement) === */
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -48,34 +55,31 @@ export async function POST(request: NextRequest) {
 
   try {
     const { url } = await request.json()
-
     if (!url || !url.includes('tiktok.com')) {
       return NextResponse.json({ error: 'URL TikTok invalide' }, { status: 400 })
     }
 
     console.log('📱 Analyse URL:', url)
 
-    // 1) Données de base typées
+    // 1) Base
     let videoData: VideoData = await extractBasicData(url)
 
-    // 2) Stats détaillées (merge d’un Partial<VideoData>)
+    // 2) Détails (merge sûr)
     if (process.env.SCRAPINGBEE_API_KEY) {
       const detailedStats = await extractDetailedStats(url)
-      if (detailedStats) {
-        videoData = { ...videoData, ...detailedStats }
-      }
+      if (detailedStats) videoData = { ...videoData, ...detailedStats }
     }
 
-    // 3) Analyse SEO IA (fallback si pas de clé)
+    // 3) SEO
     const seoAnalysis = await analyzeSEO(videoData)
 
     // 4) Métriques
     const metrics = calculateMetrics(videoData)
 
-    // 5) Courbe de rétention
+    // 5) Courbe
     const retentionCurve = generateRetentionCurve(videoData, metrics)
 
-    // 6) Sauvegarde DB
+    // 6) DB
     const savedRecord = await saveToDatabase({
       url,
       videoData,
@@ -101,10 +105,7 @@ export async function POST(request: NextRequest) {
           thumbnail: videoData.thumbnail || null,
           author: {
             username: videoData.authorUsername || '',
-            followers:
-              'authorFollowers' in videoData && typeof videoData.authorFollowers === 'number'
-                ? videoData.authorFollowers
-                : 0
+            followers: getFollowers(videoData) // <- plus d’accès direct
           },
           hashtags: videoData.hashtags || []
         },
@@ -176,13 +177,8 @@ async function extractBasicData(url: string): Promise<VideoData> {
   try {
     const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`
     const response = await fetch(oembedUrl, {
-      headers: {
-        // certains endpoints oEmbed sont tatillons
-        'Accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0'
-      }
+      headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' }
     })
-
     if (response.ok) {
       const data = (await response.json()) as any
       return {
@@ -234,9 +230,7 @@ function parseDetailedStats(html: string): Partial<VideoData> | null {
     const sigiMatch = html.match(
       /<script id="SIGI_STATE" type="application\/json">(.*?)<\/script>/s
     )
-    if (sigiMatch) {
-      jsonData = JSON.parse(sigiMatch[1])
-    }
+    if (sigiMatch) jsonData = JSON.parse(sigiMatch[1])
     if (!jsonData) return null
 
     let item: any = null
@@ -247,17 +241,16 @@ function parseDetailedStats(html: string): Partial<VideoData> | null {
     if (!item?.stats) return null
 
     const stats = item.stats
-    const uniqueId = item.author // souvent l'identifiant auteur
+    const uniqueId = item.author
     const authorUser =
       jsonData.UserModule?.users?.[uniqueId] ||
       jsonData.UserModule?.uniqueIdToUserId?.[uniqueId] ||
       {}
-    const authorStats =
-      jsonData.UserModule?.stats?.[uniqueId] ||
-      {}
+    const authorStats = jsonData.UserModule?.stats?.[uniqueId] || {}
 
-    const followerCount =
-      Number(authorUser?.followerCount ?? authorStats?.followerCount ?? 0) || 0
+    const followerCount = Number(
+      authorUser?.followerCount ?? authorStats?.followerCount ?? 0
+    ) || 0
 
     return {
       views: Number(stats.playCount) || 0,
@@ -318,7 +311,7 @@ Hashtags: ${videoData.hashtags?.join(', ') || 'Aucun'}`
         try {
           return JSON.parse(content) as SeoAnalysis
         } catch {
-          // JSON mal formé → fallback plus bas
+          // fallback plus bas
         }
       }
     }
@@ -347,7 +340,8 @@ function calculateMetrics(videoData: VideoData): Metrics {
       savesRatio: 0,
       totalEngagements: 0
     }
-    }
+  }
+
   const totalEngagements = likes + comments + shares + saves
   const engagementRate = (totalEngagements / views) * 100
 
