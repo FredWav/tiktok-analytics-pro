@@ -81,25 +81,81 @@ async function fetchOfficialTiktokData(url: string): Promise<VideoData | null> {
         console.error('❌ Clés API TikTok manquantes !');
         throw new Error('Configuration API manquante.');
     }
+
+    // --- ÉTAPE 1 : Extraire l'ID de la vidéo depuis l'URL ---
+    const videoIdMatch = url.match(/video\/(\d+)/);
+    if (!videoIdMatch || !videoIdMatch[1]) {
+        console.error('❌ Impossible d\'extraire l\'ID de la vidéo depuis l\'URL.');
+        return null;
+    }
+    const videoId = videoIdMatch[1];
+    console.log(`📹 ID de la vidéo extrait : ${videoId}`);
     
     try {
         console.log('📞 Appel à l\'API officielle de TikTok...');
-        // La vraie logique d'appel API ira ici.
-        // En attendant, on utilise des données réalistes pour que le projet avance.
-        await new Promise(resolve => setTimeout(resolve, 800));
-        const MOCK_API_RESPONSE: VideoData = {
-            title: 'Titre obtenu via l\'API Officielle',
-            description: 'Description de la vidéo, autorisée et fournie par TikTok.',
-            thumbnail: 'https://p16-sign-va.tiktokcdn.com/tos-maliva-avt-0068/e9d6e495910398a6c8433c4611c7501a~c5_720x720.jpeg',
-            authorUsername: 'auteur_officiel',
-            views: 2500000,
-            likes: 210000,
-            comments: 4500,
-            shares: 8000,
-            hashtags: ['api', 'officielle', 'tiktok']
+        
+        // --- ÉTAPE 2 : Obtenir un jeton d'accès (Access Token) ---
+        const tokenResponse = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                client_key: TIKTOK_CLIENT_KEY,
+                client_secret: TIKTOK_CLIENT_SECRET,
+                grant_type: 'client_credentials'
+            })
+        });
+
+        if (!tokenResponse.ok) {
+            const errorBody = await tokenResponse.json();
+            throw new Error(`Échec de l'obtention du token: ${JSON.stringify(errorBody)}`);
+        }
+        const tokenData = await tokenResponse.json();
+        const accessToken = tokenData.access_token;
+        console.log('🔑 Jeton d\'accès obtenu avec succès.');
+
+        // --- ÉTAPE 3 : Interroger l'API avec l'ID de la vidéo et le jeton ---
+        const fields = "id,video_description,title,cover_image_url,share_count,view_count,like_count,comment_count,author_name,hashtag_names";
+        
+        const videoApiResponse = await fetch(`https://open.tiktokapis.com/v2/video/query/?fields=${fields}`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                "filters": {
+                    "video_ids": [videoId]
+                }
+            })
+        });
+        
+        if (!videoApiResponse.ok) {
+            const errorBody = await videoApiResponse.json();
+            throw new Error(`Échec de la récupération des données vidéo: ${JSON.stringify(errorBody)}`);
+        }
+        
+        const responseData = await videoApiResponse.json();
+        const video = responseData.data?.videos?.[0];
+
+        if (!video) {
+            throw new Error("La vidéo demandée n'a pas été trouvée dans la réponse de l'API.");
+        }
+        console.log('✅ Données réelles reçues de l\'API TikTok.');
+
+        // --- ÉTAPE 4 : Mapper la réponse de l'API à notre structure de données ---
+        const result: VideoData = {
+            title: video.title || 'Titre non disponible',
+            description: video.video_description || '',
+            thumbnail: video.cover_image_url || null,
+            authorUsername: video.author_name || 'Auteur inconnu',
+            views: video.view_count || 0,
+            likes: video.like_count || 0,
+            comments: video.comment_count || 0,
+            shares: video.share_count || 0,
+            hashtags: video.hashtag_names || []
         };
-        console.log('✅ Données reçues (simulation en attendant l\'implémentation finale).');
-        return MOCK_API_RESPONSE;
+        
+        return result;
 
     } catch (error) {
         console.error('❌ Erreur lors de l\'appel à l\'API TikTok:', error);
@@ -107,6 +163,7 @@ async function fetchOfficialTiktokData(url: string): Promise<VideoData | null> {
     }
 }
 
+// ... Le reste des fonctions (calculateMetrics, saveToDatabase, formatNumber) reste identique
 function calculateMetrics(videoData: VideoData): Metrics {
     const { views = 0, likes = 0, comments = 0, shares = 0 } = videoData;
     if (views === 0) return { engagementRate: 0, likesRatio: 0, commentsRatio: 0, sharesRatio: 0, totalEngagements: 0 };
