@@ -42,10 +42,10 @@ export default function Home() {
     <div className="min-h-screen w-full max-w-4xl mx-auto p-4 md:p-8">
       <header className="text-center mb-10">
         <h1 className="text-4xl md:text-5xl font-bold text-white tracking-tight">
-          TOKNAMEΝT
+          Analyseur Vidéo TikTok
         </h1>
         <p className="text-gray-400 mt-2">
-          Surveille tes lives TikTok, analyse tes performances et booste ton audience.
+          Collez directement l'URL d'une vidéo pour obtenir ses statistiques.
         </p>
       </header>
 
@@ -67,7 +67,7 @@ export default function Home() {
             {loading ? (
               <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
             ) : (
-              'Analyser la Vidéo'
+              'Analyser'
             )}
           </button>
         </form>
@@ -92,7 +92,7 @@ export default function Home() {
 }
 
 
-// --- Composant pour afficher les résultats (restylé) ---
+// --- Composant pour afficher les résultats ---
 function AnalysisResult({ data }: { data: any }) {
   const MetricCard = ({ title, value, ratio, icon }: any) => (
     <div className="bg-[#161b22] border border-gray-700 rounded-2xl p-5">
@@ -107,7 +107,6 @@ function AnalysisResult({ data }: { data: any }) {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* --- CARTE INFO VIDEO --- */}
       <div className="bg-[#161b22] border border-gray-700 rounded-2xl p-6 flex flex-col md:flex-row gap-6">
         {data.video.thumbnail && (
           <img 
@@ -133,7 +132,6 @@ function AnalysisResult({ data }: { data: any }) {
         </div>
       </div>
       
-      {/* --- CARTES MÉTRIQUES --- */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <MetricCard title="Vues" icon="👁️" value={data.stats.formatted.views} ratio={`${data.stats.views.toLocaleString()} vues totales`} />
         <MetricCard title="Likes" icon="❤️" value={data.stats.formatted.likes} ratio={`${data.metrics.likesRatio}% ratio`} />
