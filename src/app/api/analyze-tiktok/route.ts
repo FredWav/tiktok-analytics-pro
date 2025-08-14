@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
           url,
           title: videoData.title || 'Titre non disponible',
           description: videoData.description || '',
-          thumbnail: videoData.thumbnail,
+          thumbnail: videoData.thumbnail || null,
           author: {
             username: videoData.authorUsername || '',
             followers: videoData.authorFollowers || 0
@@ -128,29 +128,59 @@ async function extractBasicData(url: string) {
       return {
         title: data.title || 'Titre non disponible',
         description: data.title || '',
-        thumbnail: data.thumbnail_url,
+        thumbnail: data.thumbnail_url || null,
         authorUsername: data.author_name || '',
-        authorUrl: data.author_url || ''
+        authorUrl: data.author_url || '',
+        authorFollowers: 0, // Valeur par défaut
+        views: 0,
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        saves: 0,
+        hashtags: [] as string[]
       }
     }
   } catch (error) {
     console.warn('⚠️ oEmbed échoué:', error)
   }
   
-  return { title: 'Vidéo TikTok', description: '', thumbnail: null }
+  return { 
+    title: 'Vidéo TikTok', 
+    description: '', 
+    thumbnail: null,
+    authorUsername: '',
+    authorUrl: '',
+    authorFollowers: 0,
+    views: 0,
+    likes: 0,
+    comments: 0,
+    shares: 0,
+    saves: 0,
+    hashtags: [] as string[]
+  }
 }
 
 async function extractDetailedStats(url: string) {
+  if (!process.env.SCRAPINGBEE_API_KEY) {
+    console.warn('⚠️ ScrapingBee key manquante')
+    return null
+  }
+
   try {
     const scrapingUrl = new URL('https://app.scrapingbee.com/api/v1/')
-    scrapingUrl.searchParams.set('api_key', process.env.SCRAPINGBEE_API_KEY!)
+    scrapingUrl.searchParams.set('api_key', process.env.SCRAPINGBEE_API_KEY)
     scrapingUrl.searchParams.set('url', url)
     scrapingUrl.searchParams.set('render_js', 'true')
     scrapingUrl.searchParams.set('wait', '3000')
     
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 25000)
+    
     const response = await fetch(scrapingUrl.toString(), { 
-      signal: AbortSignal.timeout(25000) 
+      signal: controller.signal 
     })
+    
+    clearTimeout(timeoutId)
     
     if (response.ok) {
       const html = await response.text()
@@ -217,8 +247,8 @@ async function analyzeSEO(videoData: any) {
   try {
     const prompt = `Analyse cette vidéo TikTok pour le SEO. Réponds en JSON avec:
 - score: note de 0 à 100
-- niche: catégorie détectée 
-- recommendations: 3 conseils d'amélioration
+- niche: catégorie détectée (fitness, beauté, humour, éducation, business, etc.)
+- recommendations: 3 conseils d'amélioration maximum
 
 Vidéo: "${videoData.description}"
 Hashtags: ${videoData.hashtags?.join(', ') || 'Aucun'}`
@@ -233,13 +263,15 @@ Hashtags: ${videoData.hashtags?.join(', ') || 'Aucun'}`
         model: 'gpt-4o-mini',
         response_format: { type: 'json_object' },
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 500
+        max_tokens: 500,
+        temperature: 0.3
       })
     })
 
     if (response.ok) {
       const data = await response.json()
-      return JSON.parse(data.choices[0].message.content)
+      const result = JSON.parse(data.choices[0].message.content)
+      return result
     }
   } catch (error) {
     console.error('❌ Erreur OpenAI:', error)
@@ -287,7 +319,7 @@ function calculateMetrics(videoData: any) {
   return {
     engagementRate: Number(engagementRate.toFixed(2)),
     viralScore: Math.min(100, viralScore),
-    retentionRate: Math.min(90, engagementRate * 4),
+    retentionRate: Number(Math.min(90, engagementRate * 4).toFixed(1)),
     likesRatio: Number(((likes / views) * 100).toFixed(2)),
     commentsRatio: Number(((comments / views) * 100).toFixed(2)),
     sharesRatio: Number(((shares / views) * 100).toFixed(2)),
