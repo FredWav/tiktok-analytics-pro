@@ -49,7 +49,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'URL TikTok invalide' }, { status: 400 })
     }
 
-    // Étape 1 : Extraction optimisée avec Scrapingbee
     if (!process.env.SCRAPINGBEE_API_KEY) {
         throw new Error("La clé d'API SCRAPINGBEE_API_KEY est manquante.");
     }
@@ -60,7 +59,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Impossible d'extraire les données de la vidéo TikTok." }, { status: 500 });
     }
 
-    // Le reste de la logique
     const seoAnalysis = await analyzeSEO(videoData)
     const metrics = calculateMetrics(videoData)
     const retentionCurve = generateRetentionCurve(videoData, metrics)
@@ -117,11 +115,11 @@ export async function POST(request: NextRequest) {
 async function extractDetailedStats(url: string): Promise<VideoData | null> {
     console.log('🐝 Lancement de l\'extraction optimisée avec Scrapingbee...');
 
-    // La règle d'extraction corrigée
+    // La règle d'extraction finale et corrigée
     const extractRules = {
         sigi_state: {
             selector: 'script#SIGI_STATE',
-            type: 'text' 
+            type: 'item' // On précise qu'on veut UN élément, comme demandé par l'API
         }
     };
 
@@ -147,10 +145,12 @@ async function extractDetailedStats(url: string): Promise<VideoData | null> {
         }
         
         const scrapedData = await response.json();
+        
+        // Scrapingbee renvoie le contenu textuel par défaut pour un 'item' de type script
         const sigiStateText = scrapedData.sigi_state;
 
-        if (!sigiStateText) {
-            console.error('❌ SIGI_STATE non trouvé dans la réponse de Scrapingbee (TikTok a probablement bloqué la requête).');
+        if (!sigiStateText || typeof sigiStateText !== 'string') {
+            console.error('❌ SIGI_STATE non trouvé ou invalide dans la réponse de Scrapingbee.');
             return null;
         }
 
