@@ -4,8 +4,8 @@
 @tailwind utilities;
 
 body {
-  background-color: #0d1117; /* Un bleu nuit très sombre */
-  color: #e6edf3; /* Un gris très clair pour le texte */
+  background-color: #0d1117; /* Bleu nuit très sombre */
+  color: #e6edf3; /* Gris très clair pour le texte par défaut */
 }
 
 @keyframes fadeIn {
