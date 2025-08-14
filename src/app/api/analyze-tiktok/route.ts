@@ -117,11 +117,11 @@ export async function POST(request: NextRequest) {
 async function extractDetailedStats(url: string): Promise<VideoData | null> {
     console.log('🐝 Lancement de l\'extraction optimisée avec Scrapingbee...');
 
+    // La règle d'extraction corrigée
     const extractRules = {
         sigi_state: {
             selector: 'script#SIGI_STATE',
-            type: 'text',
-            output: 'string'
+            type: 'text' 
         }
     };
 
@@ -130,6 +130,8 @@ async function extractDetailedStats(url: string): Promise<VideoData | null> {
         scrapingUrl.searchParams.set('api_key', process.env.SCRAPINGBEE_API_KEY!);
         scrapingUrl.searchParams.set('url', url);
         scrapingUrl.searchParams.set('render_js', 'true');
+        scrapingUrl.searchParams.set('premium_proxy', 'true');
+        scrapingUrl.searchParams.set('country_code', 'fr');
         scrapingUrl.searchParams.set('wait', '2000');
         scrapingUrl.searchParams.set('extract_rules', JSON.stringify(extractRules));
 
@@ -148,7 +150,7 @@ async function extractDetailedStats(url: string): Promise<VideoData | null> {
         const sigiStateText = scrapedData.sigi_state;
 
         if (!sigiStateText) {
-            console.error('❌ SIGI_STATE non trouvé dans la réponse de Scrapingbee.');
+            console.error('❌ SIGI_STATE non trouvé dans la réponse de Scrapingbee (TikTok a probablement bloqué la requête).');
             return null;
         }
 
