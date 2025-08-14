@@ -1,5 +1,27 @@
+// src/app/api/analyze-tiktok/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+
+export const runtime = 'nodejs'      // garantit le runtime Node sur Vercel
+export const dynamic = 'force-dynamic'
+
+/** Type commun et fiable pour les données vidéo */
+type VideoData = {
+  title: string
+  description: string
+  thumbnail: string | null
+  authorUsername: string
+  authorUrl: string
+  authorFollowers: number
+  views: number
+  likes: number
+  comments: number
+  shares: number
+  saves: number
+  hashtags: string[]
+}
+
+type RetentionPoint = { timePercent: number; retention: number }
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -8,22 +30,20 @@ const supabase = createClient(
 
 export async function POST(request: NextRequest) {
   console.log('🚀 Démarrage analyse TikTok...')
-  
+
   try {
     const { url } = await request.json()
-    
+
     if (!url || !url.includes('tiktok.com')) {
-      return NextResponse.json({ 
-        error: 'URL TikTok invalide' 
-      }, { status: 400 })
+      return NextResponse.json({ error: 'URL TikTok invalide' }, { status: 400 })
     }
 
     console.log('📱 Analyse URL:', url)
 
-    // 1. Extraction données de base
-    let videoData = await extractBasicData(url)
-    
-    // 2. Extraction stats détaillées (si ScrapingBee disponible)
+    // 1) Données de base (toujours un VideoData complet)
+    let videoData: VideoData = await extractBasicData(url)
+
+    // 2) Stats détaillées (merge d’un Partial<VideoData>)
     if (process.env.SCRAPINGBEE_API_KEY) {
       const detailedStats = await extractDetailedStats(url)
       if (detailedStats) {
@@ -31,16 +51,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 3. Analyse SEO avec OpenAI
+    // 3) Analyse SEO (objet libre mais stable)
     const seoAnalysis = await analyzeSEO(videoData)
-    
-    // 4. Calcul métriques
+
+    // 4) Calcul métriques (objet numériquement typé)
     const metrics = calculateMetrics(videoData)
-    
-    // 5. Génération courbe fidélisation
+
+    // 5) Courbe de rétention typée
     const retentionCurve = generateRetentionCurve(videoData, metrics)
-    
-    // 6. Sauvegarde en base
+
+    // 6) Sauvegarde
     const savedRecord = await saveToDatabase({
       url,
       videoData,
@@ -49,13 +69,16 @@ export async function POST(request: NextRequest) {
       retentionCurve
     })
 
-    // 7. Réponse finale
+    // 7) Réponse
+    const averageRetention =
+      retentionCurve.reduce((sum, p) => sum + p.retention, 0) / retentionCurve.length
+
     const response = {
       success: true,
       analysis: {
         id: savedRecord?.id,
         timestamp: new Date().toISOString(),
-        
+
         video: {
           url,
           title: videoData.title || 'Titre non disponible',
@@ -67,7 +90,7 @@ export async function POST(request: NextRequest) {
           },
           hashtags: videoData.hashtags || []
         },
-        
+
         stats: {
           views: videoData.views || 0,
           likes: videoData.likes || 0,
@@ -82,7 +105,7 @@ export async function POST(request: NextRequest) {
             saves: formatNumber(videoData.saves || 0)
           }
         },
-        
+
         metrics: {
           engagementRate: metrics.engagementRate,
           viralScore: metrics.viralScore,
@@ -93,30 +116,31 @@ export async function POST(request: NextRequest) {
           savesRatio: metrics.savesRatio,
           totalEngagements: metrics.totalEngagements
         },
-        
+
         seo: seoAnalysis,
-        
+
         retention: {
           curve: retentionCurve,
-          averageRetention: retentionCurve.reduce((sum: any, point: any) => sum + point.retention, 0) / retentionCurve.length
+          averageRetention
         }
       }
     }
 
     console.log('✅ Analyse terminée!')
     return NextResponse.json(response)
-
   } catch (error: any) {
-    console.error('❌ Erreur:', error.message)
-    return NextResponse.json({
-      error: 'Erreur lors de l\'analyse',
-      details: error.message
-    }, { status: 500 })
+    console.error('❌ Erreur:', error?.message || error)
+    return NextResponse.json(
+      { error: "Erreur lors de l'analyse", details: String(error?.message || error) },
+      { status: 500 }
+    )
   }
 }
 
-async function extractBasicData(url: string) {
-  const defaultData = {
+/** --- Implémentations typées --- **/
+
+async function extractBasicData(url: string): Promise<VideoData> {
+  const defaultData: VideoData = {
     title: 'Vidéo TikTok',
     description: '',
     thumbnail: null,
@@ -134,29 +158,27 @@ async function extractBasicData(url: string) {
   try {
     const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`
     const response = await fetch(oembedUrl)
-    
+
     if (response.ok) {
-      const data = await response.json()
+      const data = (await response.json()) as any
       return {
         ...defaultData,
-        title: data.title || 'Titre non disponible',
-        description: data.title || '',
-        thumbnail: data.thumbnail_url || null,
-        authorUsername: data.author_name || '',
-        authorUrl: data.author_url || ''
+        title: data?.title || 'Titre non disponible',
+        description: data?.title || '',
+        thumbnail: data?.thumbnail_url || null,
+        authorUsername: data?.author_name || '',
+        authorUrl: data?.author_url || ''
       }
     }
   } catch (error) {
     console.warn('⚠️ oEmbed échoué:', error)
   }
-  
+
   return defaultData
 }
 
-async function extractDetailedStats(url: string) {
-  if (!process.env.SCRAPINGBEE_API_KEY) {
-    return null
-  }
+async function extractDetailedStats(url: string): Promise<Partial<VideoData> | null> {
+  if (!process.env.SCRAPINGBEE_API_KEY) return null
 
   try {
     const scrapingUrl = new URL('https://app.scrapingbee.com/api/v1/')
@@ -164,16 +186,13 @@ async function extractDetailedStats(url: string) {
     scrapingUrl.searchParams.set('url', url)
     scrapingUrl.searchParams.set('render_js', 'true')
     scrapingUrl.searchParams.set('wait', '3000')
-    
+
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 25000)
-    
-    const response = await fetch(scrapingUrl.toString(), { 
-      signal: controller.signal 
-    })
-    
+    const timeoutId = setTimeout(() => controller.abort(), 25_000)
+
+    const response = await fetch(scrapingUrl.toString(), { signal: controller.signal })
     clearTimeout(timeoutId)
-    
+
     if (response.ok) {
       const html = await response.text()
       return parseDetailedStats(html)
@@ -181,42 +200,46 @@ async function extractDetailedStats(url: string) {
   } catch (error) {
     console.warn('⚠️ ScrapingBee échoué:', error)
   }
-  
+
   return null
 }
 
-function parseDetailedStats(html: string) {
+function parseDetailedStats(html: string): Partial<VideoData> | null {
   try {
-    let jsonData = null
-    
-    const sigiMatch = html.match(/<script id="SIGI_STATE" type="application\/json">(.*?)<\/script>/s)
+    let jsonData: any = null
+    const sigiMatch = html.match(
+      /<script id="SIGI_STATE" type="application\/json">(.*?)<\/script>/s
+    )
     if (sigiMatch) {
       jsonData = JSON.parse(sigiMatch[1])
     }
-    
     if (!jsonData) return null
-    
-    let videoData = null
+
+    let videoData: any = null
     if (jsonData.ItemModule) {
       const videoId = Object.keys(jsonData.ItemModule)[0]
       videoData = jsonData.ItemModule[videoId]
     }
-    
     if (!videoData?.stats) return null
-    
+
     const stats = videoData.stats
-    const author = videoData.author || {}
-    
+    const author = jsonData.UserModule?.users?.[videoData.author] || {} // fallback plus fiable
+
     return {
-      views: parseInt(stats.playCount) || 0,
-      likes: parseInt(stats.diggCount) || 0,
-      comments: parseInt(stats.commentCount) || 0,
-      shares: parseInt(stats.shareCount) || 0,
-      saves: parseInt(stats.collectCount) || 0,
-      description: videoData.desc || '',
-      authorUsername: author.uniqueId || '',
-      authorFollowers: parseInt(author.followerCount) || 0,
-      hashtags: videoData.textExtra?.map((tag: any) => tag.hashtagName).filter(Boolean) || []
+      views: Number(stats.playCount) || 0,
+      likes: Number(stats.diggCount) || 0,
+      comments: Number(stats.commentCount) || 0,
+      shares: Number(stats.shareCount) || 0,
+      saves: Number(stats.collectCount) || 0,
+      description: String(videoData.desc || ''),
+      authorUsername: String(videoData.author || ''),
+      authorFollowers: Number(author.followerCount) || 0,
+      hashtags:
+        (Array.isArray(videoData.textExtra)
+          ? videoData.textExtra
+              .map((t: any) => t?.hashtagName)
+              .filter(Boolean)
+          : []) as string[]
     }
   } catch (error) {
     console.error('❌ Erreur parsing:', error)
@@ -224,7 +247,9 @@ function parseDetailedStats(html: string) {
   }
 }
 
-async function analyzeSEO(videoData: any) {
+type SeoAnalysis = { score: number; niche: string; recommendations: string[] }
+
+async function analyzeSEO(videoData: VideoData): Promise<SeoAnalysis> {
   if (!process.env.OPENAI_API_KEY) {
     return {
       score: 50,
@@ -245,7 +270,7 @@ Hashtags: ${videoData.hashtags?.join(', ') || 'Aucun'}`
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -259,27 +284,40 @@ Hashtags: ${videoData.hashtags?.join(', ') || 'Aucun'}`
 
     if (response.ok) {
       const data = await response.json()
-      const result = JSON.parse(data.choices[0].message.content)
-      return result
+      const content = data?.choices?.[0]?.message?.content
+      if (typeof content === 'string') {
+        try {
+          return JSON.parse(content) as SeoAnalysis
+        } catch {
+          // fallback si la LLM sort un JSON imparfait
+        }
+      }
     }
   } catch (error) {
     console.error('❌ Erreur OpenAI:', error)
   }
 
-  return {
-    score: 50,
-    niche: 'Non déterminée', 
-    recommendations: ['Erreur analyse IA']
-  }
+  return { score: 50, niche: 'Non déterminée', recommendations: ['Erreur analyse IA'] }
 }
 
-function calculateMetrics(videoData: any) {
+type Metrics = {
+  engagementRate: number
+  viralScore: number
+  retentionRate: number
+  likesRatio: number
+  commentsRatio: number
+  sharesRatio: number
+  savesRatio: number
+  totalEngagements: number
+}
+
+function calculateMetrics(videoData: VideoData): Metrics {
   const views = videoData.views || 0
   const likes = videoData.likes || 0
   const comments = videoData.comments || 0
   const shares = videoData.shares || 0
   const saves = videoData.saves || 0
-  
+
   if (views === 0) {
     return {
       engagementRate: 0,
@@ -292,18 +330,18 @@ function calculateMetrics(videoData: any) {
       totalEngagements: 0
     }
   }
-  
+
   const totalEngagements = likes + comments + shares + saves
   const engagementRate = (totalEngagements / views) * 100
-  
+
   let viralScore = 50
   if (engagementRate > 15) viralScore += 30
   else if (engagementRate > 10) viralScore += 20
   else if (engagementRate > 5) viralScore += 10
-  
-  if (views > 1000000) viralScore += 20
-  else if (views > 100000) viralScore += 10
-  
+
+  if (views > 1_000_000) viralScore += 20
+  else if (views > 100_000) viralScore += 10
+
   return {
     engagementRate: Number(engagementRate.toFixed(2)),
     viralScore: Math.min(100, viralScore),
@@ -316,10 +354,10 @@ function calculateMetrics(videoData: any) {
   }
 }
 
-function generateRetentionCurve(videoData: any, metrics: any) {
-  const points = []
+function generateRetentionCurve(_: VideoData, metrics: Metrics): RetentionPoint[] {
+  const points: RetentionPoint[] = []
   const baseRetention = Math.max(30, Math.min(85, metrics.engagementRate * 5))
-  
+
   for (let i = 0; i <= 100; i += 10) {
     const retention = baseRetention * (1 - (i / 100) * 0.6)
     points.push({
@@ -327,13 +365,18 @@ function generateRetentionCurve(videoData: any, metrics: any) {
       retention: Number(Math.max(10, retention).toFixed(1))
     })
   }
-  
   return points
 }
 
-async function saveToDatabase(data: any) {
+async function saveToDatabase(data: {
+  url: string
+  videoData: VideoData
+  seoAnalysis: SeoAnalysis
+  metrics: Metrics
+  retentionCurve: RetentionPoint[]
+}) {
   try {
-    const { error, data: result } = await supabase
+    const { data: result, error } = await supabase
       .from('video_analyses')
       .insert({
         tiktok_url: data.url,
@@ -360,7 +403,6 @@ async function saveToDatabase(data: any) {
       console.error('❌ Erreur Supabase:', error)
       return null
     }
-
     return result
   } catch (error) {
     console.error('❌ Erreur sauvegarde:', error)
@@ -369,8 +411,8 @@ async function saveToDatabase(data: any) {
 }
 
 function formatNumber(num: number): string {
-  if (num >= 1000000000) return (num / 1000000000).toFixed(1) + 'B'
-  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M'
-  if (num >= 1000) return (num / 1000).toFixed(1) + 'K'
-  return num.toString()
+  if (num >= 1_000_000_000) return (num / 1_000_000_000).toFixed(1) + 'B'
+  if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + 'M'
+  if (num >= 1_000) return (num / 1_000).toFixed(1) + 'K'
+  return String(num)
 }
