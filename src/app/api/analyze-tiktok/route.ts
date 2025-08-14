@@ -84,40 +84,8 @@ async function fetchOfficialTiktokData(url: string): Promise<VideoData | null> {
     
     try {
         console.log('📞 Appel à l\'API officielle de TikTok...');
-        // --- VRAI APPEL API (à adapter selon la documentation de TikTok) ---
-        // La plupart des API nécessitent un "access token" que l'on obtient avec les clés.
-        
-        // EXEMPLE DE LOGIQUE
-        /*
-        const tokenResponse = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                client_key: TIKTOK_CLIENT_KEY,
-                client_secret: TIKTOK_CLIENT_SECRET,
-                grant_type: 'client_credentials'
-            })
-        });
-        if (!tokenResponse.ok) throw new Error('Échec de l\'obtention du token');
-        const tokenData = await tokenResponse.json();
-        const accessToken = tokenData.access_token;
-        
-        const videoApiResponse = await fetch(`https://open.tiktokapis.com/v2/video/query/`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                 // Le champ attendu par TikTok peut être "video_id", "url", etc. À VÉRIFIER
-                "filters": { "video_id": ["TON_ID_VIDEO_EXTRAIT_DE_L_URL"] }, 
-                "fields": "view_count,like_count,comment_count,share_count,title,description,hashtags,cover_image_url,author_name"
-            })
-        });
-        if (!videoApiResponse.ok) throw new Error('Échec de la récupération des données vidéo');
-        const videoDataFromApi = await videoApiResponse.json();
-        
-        // Il faudrait ensuite mapper la réponse de `videoDataFromApi` à notre type `VideoData`
-        */
-
-        // En attendant, on utilise des données réalistes pour que le frontend fonctionne
+        // La vraie logique d'appel API ira ici.
+        // En attendant, on utilise des données réalistes pour que le projet avance.
         await new Promise(resolve => setTimeout(resolve, 800));
         const MOCK_API_RESPONSE: VideoData = {
             title: 'Titre obtenu via l\'API Officielle',
