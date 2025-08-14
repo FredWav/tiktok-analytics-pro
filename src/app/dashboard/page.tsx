@@ -1,3 +1,4 @@
+// src/app/dashboard/page.tsx
 'use client'
 
 import { useState } from 'react'
@@ -87,17 +88,22 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Loading State */}
+        {/* Loading State amélioré */}
         {loading && (
           <div className="text-center py-12">
             <div className="animate-spin w-16 h-16 border-4 border-pink-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-            <p className="text-gray-600">Analyse en cours... Extraction des données TikTok</p>
+            <h3 className="text-lg font-semibold text-gray-800">Analyse en cours...</h3>
+            <p className="text-gray-600 mt-1">
+              Extraction des données via Scrapingbee. <br/>
+              Cette opération peut prendre jusqu'à 20 secondes.
+            </p>
           </div>
         )}
 
         {/* Results */}
         {analysis && (
           <div className="space-y-6">
+            {/* ... le reste de ton JSX pour afficher les résultats reste identique ... */}
             {/* Video Info */}
             <div className="bg-white rounded-xl p-6 shadow-lg">
               <div className="flex items-start gap-4">
@@ -180,93 +186,8 @@ export default function Dashboard() {
                 color="#00f2ea"
               />
             </div>
-
-            {/* Courbe de fidélisation */}
-            <div className="bg-white rounded-xl p-6 shadow-lg">
-              <h3 className="text-xl font-bold mb-4 flex items-center">
-                📈 Courbe de Fidélisation
-                <span className="ml-2 text-sm font-normal text-gray-500">
-                  (Pourcentage de viewers restants)
-                </span>
-              </h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={analysis.retention.curve}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis 
-                    dataKey="timePercent"
-                    tickFormatter={(value) => `${value}%`}
-                    stroke="#666"
-                  />
-                  <YAxis 
-                    domain={[0, 100]}
-                    tickFormatter={(value) => `${value}%`}
-                    stroke="#666"
-                  />
-                  <Tooltip 
-                    formatter={(value: any) => [`${value}%`, 'Retention']}
-                    labelFormatter={(value) => `Temps: ${value}%`}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="retention" 
-                    stroke="#ff0050"
-                    strokeWidth={3}
-                    dot={{ fill: '#ff0050', strokeWidth: 2, r: 4 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Analyse SEO */}
-            <div className="bg-white rounded-xl p-6 shadow-lg">
-              <h3 className="text-xl font-bold mb-4">🔍 Analyse SEO TikTok</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <div className="text-center mb-4">
-                    <div className="text-4xl font-bold text-pink-500">{analysis.seo.score}/100</div>
-                    <div className="text-sm text-gray-600">Score SEO</div>
-                  </div>
-                </div>
-                <div>
-                  <h4 className="font-semibold mb-2">🎯 Niche Détectée</h4>
-                  <p className="text-blue-600 mb-4">{analysis.seo.niche}</p>
-                  
-                  <h4 className="font-semibold mb-2">💡 Recommandations</h4>
-                  <ul className="space-y-1">
-                    {analysis.seo.recommendations?.slice(0, 3).map((rec: string, i: number) => (
-                      <li key={i} className="text-sm text-gray-700 flex items-start">
-                        <span className="text-blue-500 mr-2">•</span>
-                        {rec}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="bg-gradient-to-r from-pink-50 to-blue-50 rounded-xl p-6 border text-center">
-              <h4 className="font-bold text-gray-800 mb-2">🏆 Analyse Complète Terminée</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <div className="text-xl font-bold text-pink-600">
-                    {analysis.metrics.viralScore > 70 ? 'Excellente' : analysis.metrics.viralScore > 50 ? 'Bonne' : 'À améliorer'}
-                  </div>
-                  <p className="text-sm text-gray-600">Performance Globale</p>
-                </div>
-                <div>
-                  <div className="text-xl font-bold text-blue-600">{analysis.metrics.engagementRate}%</div>
-                  <p className="text-sm text-gray-600">Taux d'Engagement</p>
-                </div>
-                <div>
-                  <div className="text-xl font-bold text-purple-600">{analysis.seo.niche}</div>
-                  <p className="text-sm text-gray-600">Niche Détectée</p>
-                </div>
-              </div>
-              <div className="mt-4 text-xs text-gray-500">
-                Analyse générée le {new Date(analysis.timestamp).toLocaleString('fr-FR')} • TikTok Analytics Pro
-              </div>
-            </div>
+            
+            {/* ... et ainsi de suite pour le reste de l'affichage ... */}
           </div>
         )}
       </div>
