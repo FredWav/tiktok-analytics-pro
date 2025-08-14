@@ -34,15 +34,6 @@ type Metrics = {
   totalEngagements: number
 }
 
-/** === Helpers de narrowing === */
-function getFollowers(v: unknown): number {
-  if (v && typeof v === 'object' && 'authorFollowers' in v) {
-    const val = (v as any).authorFollowers
-    if (typeof val === 'number' && Number.isFinite(val)) return val
-  }
-  return 0
-}
-
 /** === Supabase (clé Service Role côté serveur uniquement) === */
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -51,20 +42,16 @@ const supabase = createClient(
 
 /** === Handler === */
 export async function POST(request: NextRequest) {
-  console.log('🚀 Démarrage analyse TikTok...')
-
   try {
     const { url } = await request.json()
     if (!url || !url.includes('tiktok.com')) {
       return NextResponse.json({ error: 'URL TikTok invalide' }, { status: 400 })
     }
 
-    console.log('📱 Analyse URL:', url)
-
     // 1) Base
     let videoData: VideoData = await extractBasicData(url)
 
-    // 2) Détails (merge sûr)
+    // 2) Détails
     if (process.env.SCRAPINGBEE_API_KEY) {
       const detailedStats = await extractDetailedStats(url)
       if (detailedStats) videoData = { ...videoData, ...detailedStats }
@@ -88,16 +75,21 @@ export async function POST(request: NextRequest) {
       retentionCurve
     })
 
-    // 7) Réponse
+    // 7) Réponse — ***AUCUN ACCÈS DIRECT A LA PROPRIÉTÉ***
+    const vd: any = videoData
+    const followers =
+      typeof vd?.authorFollowers === 'number' && Number.isFinite(vd.authorFollowers)
+        ? vd.authorFollowers
+        : 0
+
     const averageRetention =
       retentionCurve.reduce((sum, p) => sum + p.retention, 0) / retentionCurve.length
 
-    const response = {
+    return NextResponse.json({
       success: true,
       analysis: {
         id: savedRecord?.id,
         timestamp: new Date().toISOString(),
-
         video: {
           url,
           title: videoData.title || 'Titre non disponible',
@@ -105,11 +97,10 @@ export async function POST(request: NextRequest) {
           thumbnail: videoData.thumbnail || null,
           author: {
             username: videoData.authorUsername || '',
-            followers: getFollowers(videoData) // <- plus d’accès direct
+            followers // <-- variable typée localement (pas d’accès direct)
           },
           hashtags: videoData.hashtags || []
         },
-
         stats: {
           views: videoData.views || 0,
           likes: videoData.likes || 0,
@@ -124,7 +115,6 @@ export async function POST(request: NextRequest) {
             saves: formatNumber(videoData.saves || 0)
           }
         },
-
         metrics: {
           engagementRate: metrics.engagementRate,
           viralScore: metrics.viralScore,
@@ -135,20 +125,11 @@ export async function POST(request: NextRequest) {
           savesRatio: metrics.savesRatio,
           totalEngagements: metrics.totalEngagements
         },
-
         seo: seoAnalysis,
-
-        retention: {
-          curve: retentionCurve,
-          averageRetention
-        }
+        retention: { curve: retentionCurve, averageRetention }
       }
-    }
-
-    console.log('✅ Analyse terminée!')
-    return NextResponse.json(response)
+    })
   } catch (error: any) {
-    console.error('❌ Erreur:', error?.message || error)
     return NextResponse.json(
       { error: "Erreur lors de l'analyse", details: String(error?.message || error) },
       { status: 500 }
@@ -190,9 +171,7 @@ async function extractBasicData(url: string): Promise<VideoData> {
         authorUrl: data?.author_url || ''
       }
     }
-  } catch (error) {
-    console.warn('⚠️ oEmbed échoué:', error)
-  }
+  } catch {}
 
   return defaultData
 }
@@ -217,9 +196,7 @@ async function extractDetailedStats(url: string): Promise<Partial<VideoData> | n
       const html = await response.text()
       return parseDetailedStats(html)
     }
-  } catch (error) {
-    console.warn('⚠️ ScrapingBee échoué:', error)
-  }
+  } catch {}
 
   return null
 }
@@ -265,8 +242,7 @@ function parseDetailedStats(html: string): Partial<VideoData> | null {
         ? item.textExtra.map((t: any) => t?.hashtagName).filter(Boolean)
         : []
     }
-  } catch (error) {
-    console.error('❌ Erreur parsing:', error)
+  } catch {
     return null
   }
 }
@@ -310,14 +286,10 @@ Hashtags: ${videoData.hashtags?.join(', ') || 'Aucun'}`
       if (typeof content === 'string') {
         try {
           return JSON.parse(content) as SeoAnalysis
-        } catch {
-          // fallback plus bas
-        }
+        } catch {}
       }
     }
-  } catch (error) {
-    console.error('❌ Erreur OpenAI:', error)
-  }
+  } catch {}
 
   return { score: 50, niche: 'Non déterminée', recommendations: ['Erreur analyse IA'] }
 }
@@ -410,13 +382,9 @@ async function saveToDatabase(data: {
       .select()
       .single()
 
-    if (error) {
-      console.error('❌ Erreur Supabase:', error)
-      return null
-    }
+    if (error) return null
     return result
-  } catch (error) {
-    console.error('❌ Erreur sauvegarde:', error)
+  } catch {
     return null
   }
 }
