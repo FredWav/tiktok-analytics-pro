@@ -2,7 +2,6 @@
 'use client'
 
 import { useState } from 'react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 export default function Dashboard() {
   const [url, setUrl] = useState('')
@@ -29,7 +28,7 @@ export default function Dashboard() {
 
       const data = await response.json()
       
-      if (!response.ok) {
+      if (!response.ok || !data.success) {
         throw new Error(data.error || 'Erreur lors de l\'analyse')
       }
 
@@ -41,7 +40,7 @@ export default function Dashboard() {
     }
   }
 
-  const MetricCard = ({ title, value, subtitle, color = '#ff0050' }: any) => (
+  const MetricCard = ({ title, value, subtitle, color = '#333' }: any) => (
     <div className="bg-white rounded-xl p-6 shadow-lg border">
       <h3 className="text-sm font-medium text-gray-600 mb-2">{title}</h3>
       <div className="text-3xl font-bold" style={{ color }}>{value}</div>
@@ -58,7 +57,7 @@ export default function Dashboard() {
             🎵 TikTok Analytics Pro
           </h1>
           <p className="text-gray-600">
-            Analysez vos vidéos TikTok avec des métriques avancées
+            Analysez les données publiques de vos vidéos via l'API Officielle
           </p>
         </div>
 
@@ -88,22 +87,17 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Loading State amélioré */}
+        {/* Loading State */}
         {loading && (
           <div className="text-center py-12">
             <div className="animate-spin w-16 h-16 border-4 border-pink-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-            <h3 className="text-lg font-semibold text-gray-800">Analyse en cours...</h3>
-            <p className="text-gray-600 mt-1">
-              Extraction des données via Scrapingbee. <br/>
-              Cette opération peut prendre jusqu'à 20 secondes.
-            </p>
+            <p className="text-gray-600">Appel à l'API Officielle de TikTok...</p>
           </div>
         )}
 
         {/* Results */}
         {analysis && (
           <div className="space-y-6">
-            {/* ... le reste de ton JSX pour afficher les résultats reste identique ... */}
             {/* Video Info */}
             <div className="bg-white rounded-xl p-6 shadow-lg">
               <div className="flex items-start gap-4">
@@ -116,10 +110,11 @@ export default function Dashboard() {
                 )}
                 <div className="flex-1">
                   <h2 className="text-2xl font-bold mb-2">📹 {analysis.video.title}</h2>
+                  {/* C'est cette ligne qui causait l'erreur et qui fonctionnera maintenant */}
                   <p className="text-gray-600 mb-3">@{analysis.video.author.username}</p>
                   <p className="text-gray-700 mb-4">{analysis.video.description}</p>
                   
-                  {analysis.video.hashtags.length > 0 && (
+                  {analysis.video.hashtags && analysis.video.hashtags.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {analysis.video.hashtags.map((tag: string, i: number) => (
                         <span key={i} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
@@ -132,8 +127,8 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Main Metrics */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            {/* Main Metrics (simplifiées) */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <MetricCard 
                 title="👁️ Vues" 
                 value={analysis.stats.formatted.views} 
@@ -157,37 +152,12 @@ export default function Dashboard() {
                 subtitle={`${analysis.metrics.sharesRatio}% ratio`}
                 color="#fe2c55"
               />
-              <MetricCard 
-                title="🔖 Saves" 
-                value={analysis.stats.formatted.saves}
-                subtitle={`${analysis.metrics.savesRatio}% ratio`}
-                color="#25f4ee"
-              />
-            </div>
-
-            {/* KPIs Avancés */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <MetricCard 
-                title="📈 Taux d'Engagement" 
-                value={`${analysis.metrics.engagementRate}%`}
-                subtitle="Total engagements / vues"
-                color={analysis.metrics.engagementRate > 10 ? '#22c55e' : analysis.metrics.engagementRate > 5 ? '#f59e0b' : '#ef4444'}
-              />
-              <MetricCard 
-                title="🚀 Score Viral" 
-                value={`${analysis.metrics.viralScore}/100`}
-                subtitle="Potentiel de viralité"
-                color={analysis.metrics.viralScore > 70 ? '#22c55e' : analysis.metrics.viralScore > 50 ? '#f59e0b' : '#ef4444'}
-              />
-              <MetricCard 
-                title="⏱️ Retention" 
-                value={`${analysis.metrics.retentionRate}%`}
-                subtitle="Fidélisation estimée"
-                color="#00f2ea"
-              />
             </div>
             
-            {/* ... et ainsi de suite pour le reste de l'affichage ... */}
+            {/* Pied de page de l'analyse */}
+            <div className="text-center text-xs text-gray-500 pt-4">
+              Analyse générée le {new Date(analysis.timestamp).toLocaleString('fr-FR')}
+            </div>
           </div>
         )}
       </div>
