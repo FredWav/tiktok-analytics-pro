@@ -7,6 +7,22 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+// Interface pour les données vidéo
+interface VideoData {
+  title: string
+  description: string
+  thumbnail: string | null
+  authorUsername: string
+  authorUrl: string
+  authorFollowers: number
+  views: number
+  likes: number
+  comments: number
+  shares: number
+  saves: number
+  hashtags: string[]
+}
+
 export async function POST(request: NextRequest) {
   console.log('🚀 Démarrage analyse TikTok...')
   
@@ -22,7 +38,7 @@ export async function POST(request: NextRequest) {
     console.log('📱 Analyse URL:', url)
 
     // 1. Extraction données de base via oEmbed
-    let videoData = await extractBasicData(url)
+    let videoData: VideoData = await extractBasicData(url)
     
     // 2. Extraction stats détaillées (si ScrapingBee disponible)
     if (process.env.SCRAPINGBEE_API_KEY) {
@@ -59,28 +75,28 @@ export async function POST(request: NextRequest) {
         
         video: {
           url,
-          title: videoData.title || 'Titre non disponible',
-          description: videoData.description || '',
-          thumbnail: videoData.thumbnail || null,
+          title: videoData.title,
+          description: videoData.description,
+          thumbnail: videoData.thumbnail,
           author: {
-            username: videoData.authorUsername || '',
-            followers: videoData.authorFollowers || 0
+            username: videoData.authorUsername,
+            followers: videoData.authorFollowers
           },
-          hashtags: videoData.hashtags || []
+          hashtags: videoData.hashtags
         },
         
         stats: {
-          views: videoData.views || 0,
-          likes: videoData.likes || 0,
-          comments: videoData.comments || 0,
-          shares: videoData.shares || 0,
-          saves: videoData.saves || 0,
+          views: videoData.views,
+          likes: videoData.likes,
+          comments: videoData.comments,
+          shares: videoData.shares,
+          saves: videoData.saves,
           formatted: {
-            views: formatNumber(videoData.views || 0),
-            likes: formatNumber(videoData.likes || 0),
-            comments: formatNumber(videoData.comments || 0),
-            shares: formatNumber(videoData.shares || 0),
-            saves: formatNumber(videoData.saves || 0)
+            views: formatNumber(videoData.views),
+            likes: formatNumber(videoData.likes),
+            comments: formatNumber(videoData.comments),
+            shares: formatNumber(videoData.shares),
+            saves: formatNumber(videoData.saves)
           }
         },
         
@@ -118,35 +134,11 @@ export async function POST(request: NextRequest) {
 
 // ===== FONCTIONS UTILITAIRES =====
 
-async function extractBasicData(url: string) {
-  try {
-    const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`
-    const response = await fetch(oembedUrl)
-    
-    if (response.ok) {
-      const data = await response.json()
-      return {
-        title: data.title || 'Titre non disponible',
-        description: data.title || '',
-        thumbnail: data.thumbnail_url || null,
-        authorUsername: data.author_name || '',
-        authorUrl: data.author_url || '',
-        authorFollowers: 0, // Valeur par défaut
-        views: 0,
-        likes: 0,
-        comments: 0,
-        shares: 0,
-        saves: 0,
-        hashtags: [] as string[]
-      }
-    }
-  } catch (error) {
-    console.warn('⚠️ oEmbed échoué:', error)
-  }
-  
-  return { 
-    title: 'Vidéo TikTok', 
-    description: '', 
+async function extractBasicData(url: string): Promise<VideoData> {
+  // Structure par défaut avec tous les champs requis
+  const defaultData: VideoData = {
+    title: 'Vidéo TikTok',
+    description: '',
     thumbnail: null,
     authorUsername: '',
     authorUrl: '',
@@ -156,11 +148,32 @@ async function extractBasicData(url: string) {
     comments: 0,
     shares: 0,
     saves: 0,
-    hashtags: [] as string[]
+    hashtags: []
   }
+
+  try {
+    const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`
+    const response = await fetch(oembedUrl)
+    
+    if (response.ok) {
+      const data = await response.json()
+      return {
+        ...defaultData,
+        title: data.title || 'Titre non disponible',
+        description: data.title || '',
+        thumbnail: data.thumbnail_url || null,
+        authorUsername: data.author_name || '',
+        authorUrl: data.author_url || ''
+      }
+    }
+  } catch (error) {
+    console.warn('⚠️ oEmbed échoué:', error)
+  }
+  
+  return defaultData
 }
 
-async function extractDetailedStats(url: string) {
+async function extractDetailedStats(url: string): Promise<Partial<VideoData> | null> {
   if (!process.env.SCRAPINGBEE_API_KEY) {
     console.warn('⚠️ ScrapingBee key manquante')
     return null
@@ -193,7 +206,7 @@ async function extractDetailedStats(url: string) {
   return null
 }
 
-function parseDetailedStats(html: string) {
+function parseDetailedStats(html: string): Partial<VideoData> | null {
   try {
     // Recherche du JSON TikTok dans le HTML
     let jsonData = null
@@ -234,7 +247,7 @@ function parseDetailedStats(html: string) {
   }
 }
 
-async function analyzeSEO(videoData: any) {
+async function analyzeSEO(videoData: VideoData) {
   if (!process.env.OPENAI_API_KEY) {
     console.warn('⚠️ OpenAI key manquante')
     return {
@@ -284,12 +297,8 @@ Hashtags: ${videoData.hashtags?.join(', ') || 'Aucun'}`
   }
 }
 
-function calculateMetrics(videoData: any) {
-  const views = videoData.views || 0
-  const likes = videoData.likes || 0
-  const comments = videoData.comments || 0
-  const shares = videoData.shares || 0
-  const saves = videoData.saves || 0
+function calculateMetrics(videoData: VideoData) {
+  const { views, likes, comments, shares, saves } = videoData
   
   if (views === 0) {
     return {
@@ -328,7 +337,7 @@ function calculateMetrics(videoData: any) {
   }
 }
 
-function generateRetentionCurve(videoData: any, metrics: any) {
+function generateRetentionCurve(videoData: VideoData, metrics: any) {
   const points = []
   const baseRetention = Math.max(30, Math.min(85, metrics.engagementRate * 5))
   
@@ -352,17 +361,17 @@ async function saveToDatabase(data: any) {
         title: data.videoData.title,
         author_username: data.videoData.authorUsername,
         description: data.videoData.description,
-        views_count: data.videoData.views || 0,
-        likes_count: data.videoData.likes || 0,
-        comments_count: data.videoData.comments || 0,
-        shares_count: data.videoData.shares || 0,
-        saves_count: data.videoData.saves || 0,
+        views_count: data.videoData.views,
+        likes_count: data.videoData.likes,
+        comments_count: data.videoData.comments,
+        shares_count: data.videoData.shares,
+        saves_count: data.videoData.saves,
         engagement_rate: data.metrics.engagementRate,
         viral_score: data.metrics.viralScore,
         retention_rate: data.metrics.retentionRate,
         seo_score: data.seoAnalysis.score,
         niche: data.seoAnalysis.niche,
-        hashtags: JSON.stringify(data.videoData.hashtags || []),
+        hashtags: JSON.stringify(data.videoData.hashtags),
         retention_curve: JSON.stringify(data.retentionCurve)
       })
       .select()
