@@ -1,27 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-// Configuration Supabase
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
-
-// Interface pour les données vidéo
-interface VideoData {
-  title: string
-  description: string
-  thumbnail: string | null
-  authorUsername: string
-  authorUrl: string
-  authorFollowers: number
-  views: number
-  likes: number
-  comments: number
-  shares: number
-  saves: number
-  hashtags: string[]
-}
 
 export async function POST(request: NextRequest) {
   console.log('🚀 Démarrage analyse TikTok...')
@@ -37,8 +20,8 @@ export async function POST(request: NextRequest) {
 
     console.log('📱 Analyse URL:', url)
 
-    // 1. Extraction données de base via oEmbed
-    let videoData: VideoData = await extractBasicData(url)
+    // 1. Extraction données de base
+    let videoData = await extractBasicData(url)
     
     // 2. Extraction stats détaillées (si ScrapingBee disponible)
     if (process.env.SCRAPINGBEE_API_KEY) {
@@ -75,28 +58,28 @@ export async function POST(request: NextRequest) {
         
         video: {
           url,
-          title: videoData.title,
-          description: videoData.description,
-          thumbnail: videoData.thumbnail,
+          title: videoData.title || 'Titre non disponible',
+          description: videoData.description || '',
+          thumbnail: videoData.thumbnail || null,
           author: {
-            username: videoData.authorUsername,
-            followers: videoData.authorFollowers
+            username: videoData.authorUsername || '',
+            followers: videoData.authorFollowers || 0
           },
-          hashtags: videoData.hashtags
+          hashtags: videoData.hashtags || []
         },
         
         stats: {
-          views: videoData.views,
-          likes: videoData.likes,
-          comments: videoData.comments,
-          shares: videoData.shares,
-          saves: videoData.saves,
+          views: videoData.views || 0,
+          likes: videoData.likes || 0,
+          comments: videoData.comments || 0,
+          shares: videoData.shares || 0,
+          saves: videoData.saves || 0,
           formatted: {
-            views: formatNumber(videoData.views),
-            likes: formatNumber(videoData.likes),
-            comments: formatNumber(videoData.comments),
-            shares: formatNumber(videoData.shares),
-            saves: formatNumber(videoData.saves)
+            views: formatNumber(videoData.views || 0),
+            likes: formatNumber(videoData.likes || 0),
+            comments: formatNumber(videoData.comments || 0),
+            shares: formatNumber(videoData.shares || 0),
+            saves: formatNumber(videoData.saves || 0)
           }
         },
         
@@ -115,7 +98,7 @@ export async function POST(request: NextRequest) {
         
         retention: {
           curve: retentionCurve,
-          averageRetention: retentionCurve.reduce((sum, point) => sum + point.retention, 0) / retentionCurve.length
+          averageRetention: retentionCurve.reduce((sum: any, point: any) => sum + point.retention, 0) / retentionCurve.length
         }
       }
     }
@@ -132,11 +115,8 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// ===== FONCTIONS UTILITAIRES =====
-
-async function extractBasicData(url: string): Promise<VideoData> {
-  // Structure par défaut avec tous les champs requis
-  const defaultData: VideoData = {
+async function extractBasicData(url: string) {
+  const defaultData = {
     title: 'Vidéo TikTok',
     description: '',
     thumbnail: null,
@@ -173,9 +153,8 @@ async function extractBasicData(url: string): Promise<VideoData> {
   return defaultData
 }
 
-async function extractDetailedStats(url: string): Promise<Partial<VideoData> | null> {
+async function extractDetailedStats(url: string) {
   if (!process.env.SCRAPINGBEE_API_KEY) {
-    console.warn('⚠️ ScrapingBee key manquante')
     return null
   }
 
@@ -206,9 +185,8 @@ async function extractDetailedStats(url: string): Promise<Partial<VideoData> | n
   return null
 }
 
-function parseDetailedStats(html: string): Partial<VideoData> | null {
+function parseDetailedStats(html: string) {
   try {
-    // Recherche du JSON TikTok dans le HTML
     let jsonData = null
     
     const sigiMatch = html.match(/<script id="SIGI_STATE" type="application\/json">(.*?)<\/script>/s)
@@ -218,7 +196,6 @@ function parseDetailedStats(html: string): Partial<VideoData> | null {
     
     if (!jsonData) return null
     
-    // Extraction des stats
     let videoData = null
     if (jsonData.ItemModule) {
       const videoId = Object.keys(jsonData.ItemModule)[0]
@@ -247,9 +224,8 @@ function parseDetailedStats(html: string): Partial<VideoData> | null {
   }
 }
 
-async function analyzeSEO(videoData: VideoData) {
+async function analyzeSEO(videoData: any) {
   if (!process.env.OPENAI_API_KEY) {
-    console.warn('⚠️ OpenAI key manquante')
     return {
       score: 50,
       niche: 'Non déterminée',
@@ -297,8 +273,12 @@ Hashtags: ${videoData.hashtags?.join(', ') || 'Aucun'}`
   }
 }
 
-function calculateMetrics(videoData: VideoData) {
-  const { views, likes, comments, shares, saves } = videoData
+function calculateMetrics(videoData: any) {
+  const views = videoData.views || 0
+  const likes = videoData.likes || 0
+  const comments = videoData.comments || 0
+  const shares = videoData.shares || 0
+  const saves = videoData.saves || 0
   
   if (views === 0) {
     return {
@@ -316,7 +296,6 @@ function calculateMetrics(videoData: VideoData) {
   const totalEngagements = likes + comments + shares + saves
   const engagementRate = (totalEngagements / views) * 100
   
-  // Score viral simplifié
   let viralScore = 50
   if (engagementRate > 15) viralScore += 30
   else if (engagementRate > 10) viralScore += 20
@@ -337,7 +316,7 @@ function calculateMetrics(videoData: VideoData) {
   }
 }
 
-function generateRetentionCurve(videoData: VideoData, metrics: any) {
+function generateRetentionCurve(videoData: any, metrics: any) {
   const points = []
   const baseRetention = Math.max(30, Math.min(85, metrics.engagementRate * 5))
   
@@ -361,17 +340,17 @@ async function saveToDatabase(data: any) {
         title: data.videoData.title,
         author_username: data.videoData.authorUsername,
         description: data.videoData.description,
-        views_count: data.videoData.views,
-        likes_count: data.videoData.likes,
-        comments_count: data.videoData.comments,
-        shares_count: data.videoData.shares,
-        saves_count: data.videoData.saves,
+        views_count: data.videoData.views || 0,
+        likes_count: data.videoData.likes || 0,
+        comments_count: data.videoData.comments || 0,
+        shares_count: data.videoData.shares || 0,
+        saves_count: data.videoData.saves || 0,
         engagement_rate: data.metrics.engagementRate,
         viral_score: data.metrics.viralScore,
         retention_rate: data.metrics.retentionRate,
         seo_score: data.seoAnalysis.score,
         niche: data.seoAnalysis.niche,
-        hashtags: JSON.stringify(data.videoData.hashtags),
+        hashtags: JSON.stringify(data.videoData.hashtags || []),
         retention_curve: JSON.stringify(data.retentionCurve)
       })
       .select()
