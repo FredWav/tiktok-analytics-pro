@@ -4,12 +4,10 @@
 @tailwind utilities;
 
 body {
-  /* On utilise les couleurs du thème TOKNAMEΝT */
   background-color: #0d1117; /* Un bleu nuit très sombre */
   color: #e6edf3; /* Un gris très clair pour le texte */
 }
 
-/* Ajout d'une animation simple pour l'apparition des résultats */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
